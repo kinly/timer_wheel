@@ -32,12 +32,12 @@ namespace base {
             time64_t _time64;
 
             struct {
-                uint16_t _bucket5 : 10;     // 分桶：5  1024
-                uint16_t _bucket4 : 8;      // 分桶：4  256
-                uint16_t _bucket3 : 6;      // 分桶：3  64
-                uint16_t _bucket2 : 6;      // 分桶：2  64
-                uint16_t _bucket1 : 6;      // 分桶：1  64
-                uint16_t _bucket0 : 6;      // 分桶：0  64
+                time64_t _bucket5 : 10;     // 分桶：5  1024
+                time64_t _bucket4 : 8;      // 分桶：4  256
+                time64_t _bucket3 : 6;      // 分桶：3  64
+                time64_t _bucket2 : 6;      // 分桶：2  64
+                time64_t _bucket1 : 6;      // 分桶：1  64
+                time64_t _bucket0 : 6;      // 分桶：0  64
 
             };
         };
