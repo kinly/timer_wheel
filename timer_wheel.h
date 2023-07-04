@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <queue>
+#include <mutex>
 #include <algorithm>
 
 namespace base {
@@ -27,19 +28,49 @@ namespace base {
     template<uint64_t _Precision = 10, class _Mutex = non_lock>
     class timer_wheel {
         using time64_t = uint64_t;
+        using bucket_t = time64_t;
 
-        union clock {
-            time64_t _time64;
+        struct clock {
 
-            struct {
-                time64_t _bucket5 : 10;     // 分桶：5  1024
-                time64_t _bucket4 : 8;      // 分桶：4  256
-                time64_t _bucket3 : 6;      // 分桶：3  64
-                time64_t _bucket2 : 6;      // 分桶：2  64
-                time64_t _bucket1 : 6;      // 分桶：1  64
-                time64_t _bucket0 : 6;      // 分桶：0  64
+            time64_t _time64 = 0;
 
-            };
+            clock(time64_t src)
+                : _time64(src) {
+            }
+
+            static constexpr bucket_t _5_bits = 10;
+            static constexpr bucket_t _4_bits = 8;
+            static constexpr bucket_t _3_bits = 6;
+            static constexpr bucket_t _2_bits = 6;
+            static constexpr bucket_t _1_bits = 6;
+            static constexpr bucket_t _0_bits = 6;
+
+            static constexpr bucket_t _5_edge = 1ull << _5_bits;
+            static constexpr bucket_t _4_edge = 1ull << _4_bits;
+            static constexpr bucket_t _3_edge = 1ull << _3_bits;
+            static constexpr bucket_t _2_edge = 1ull << _2_bits;
+            static constexpr bucket_t _1_edge = 1ull << _1_bits;
+            static constexpr bucket_t _0_edge = 1ull << _0_bits;
+
+            // https://stackoverflow.com/questions/76605488/inconsistent-results-when-type-punning-uint64-t-with-union-and-bit-field
+            constexpr bucket_t _5() const {
+                return (_time64 >> 0) & (_5_edge - 1);
+            }
+            constexpr bucket_t _4() const {
+                return (_time64 >> _5_bits) & (_4_edge - 1);
+            }
+            constexpr bucket_t _3() const {
+                return (_time64 >> (_4_bits + _5_bits)) & (_3_edge - 1);
+            }
+            constexpr bucket_t _2() const {
+                return (_time64 >> (_3_bits + _4_bits + _5_bits)) & (_2_edge - 1);
+            }
+            constexpr bucket_t _1() const {
+                return (_time64 >> (_2_bits + _3_bits + _4_bits + _5_bits)) & (_1_edge - 1);
+            }
+            constexpr bucket_t _0() const {
+                return (_time64 >> (_1_bits + _2_bits + _3_bits + _4_bits + _5_bits)) & (_0_edge - 1);
+            }
         };
 
         static constexpr std::size_t bucket_count = 0x600; // 分桶总数
@@ -169,18 +200,18 @@ namespace base {
             {
                 clock clk = { _tick };
 
-                if (clk._bucket5) {
-                    step_list(_wheels[clk._bucket5]);
-                } else if (clk._bucket4) {
-                    step_list(_wheels[clk._bucket4 + 0x400]);
-                } else if (clk._bucket3) {
-                    step_list(_wheels[clk._bucket3 + 0x500]);
-                } else if (clk._bucket2) {
-                    step_list(_wheels[clk._bucket2 + 0x540]);
-                } else if (clk._bucket1) {
-                    step_list(_wheels[clk._bucket1 + 0x580]);
-                } else if (clk._bucket0) {
-                    step_list(_wheels[clk._bucket0 + 0x5c0]);
+                if (clk._5()) {
+                    step_list(_wheels[clk._5()]);
+                } else if (clk._4()) {
+                    step_list(_wheels[clk._4() + clock::_5_edge]);
+                } else if (clk._3()) {
+                    step_list(_wheels[clk._3() + clock::_4_edge + clock::_5_edge]);
+                } else if (clk._2()) {
+                    step_list(_wheels[clk._2() + clock::_3_edge + clock::_4_edge + clock::_5_edge]);
+                } else if (clk._1()) {
+                    step_list(_wheels[clk._1() + clock::_2_edge + clock::_3_edge + clock::_4_edge + clock::_5_edge]);
+                } else if (clk._0()) {
+                    step_list(_wheels[clk._0() + clock::_1_edge + clock::_2_edge + clock::_3_edge + clock::_4_edge + clock::_5_edge]);
                 }
 
                 _tick += 1;
@@ -195,18 +226,18 @@ namespace base {
             clock clk1 = { evt->_next };
             clock clk2 = { _tick };
 
-            if (clk1._bucket0 != clk2._bucket0) {
-                _wheels[0x5c0 + clk1._bucket0].push_back(evt->_handle);
-            } else if (clk1._bucket1 != clk2._bucket1) {
-                _wheels[0x580 + clk1._bucket1].push_back(evt->_handle);
-            } else if (clk1._bucket2 != clk2._bucket2) {
-                _wheels[0x540 + clk1._bucket2].push_back(evt->_handle);
-            } else if (clk1._bucket3 != clk2._bucket3) {
-                _wheels[0x500 + clk1._bucket3].push_back(evt->_handle);
-            } else if (clk1._bucket4 != clk2._bucket4) {
-                _wheels[0x400 + clk1._bucket4].push_back(evt->_handle);
+            if (clk1._0() != clk2._0()) {
+                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clock::_1_edge + clk1._0()].push_back(evt->_handle);
+            } else if (clk1._1() != clk2._1()) {
+                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clk1._1()].push_back(evt->_handle);
+            } else if (clk1._2() != clk2._2()) {
+                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clk1._2()].push_back(evt->_handle);
+            } else if (clk1._3() != clk2._3()) {
+                _wheels[clock::_5_edge + clock::_4_edge + clk1._3()].push_back(evt->_handle);
+            } else if (clk1._4() != clk2._4()) {
+                _wheels[clock::_5_edge + clk1._4()].push_back(evt->_handle);
             } else {
-                _wheels[clk1._bucket5].push_back(evt->_handle);
+                _wheels[clk1._5()].push_back(evt->_handle);
             }
         }
 
