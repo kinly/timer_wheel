@@ -4,8 +4,10 @@
 #include <functional>
 #include <memory>
 #include <queue>
-#include <mutex>
 #include <algorithm>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 
 namespace base {
     /**
@@ -14,6 +16,7 @@ namespace base {
      * min period: 1ms
      */
 
+    using timestamp = uint64_t;
     using time_clock = std::chrono::system_clock;
     using time_duration = std::chrono::milliseconds;
     using timer_handle = uint64_t;
@@ -24,6 +27,26 @@ namespace base {
         void lock() {}
         void unlock() {}
     };
+
+    template<typename _Duration = std::chrono::milliseconds, int _Value = 0>
+    static time_clock::time_point __time_point() {
+        return time_clock::now() + _Duration(_Value);
+    }
+
+    template<typename _Duration = std::chrono::milliseconds>
+    static timestamp current_timestamp() {
+        return std::chrono::duration_cast<_Duration>(__time_point<_Duration>().time_since_epoch()).count();
+    }
+
+    // todo: 性能较差
+    // static std::string current_timestamp_str() {
+    //     auto time_point_ = __time_point<time_duration>();
+    //     std::time_t tt = time_clock::to_time_t(time_point_);
+    //     std::stringstream ss;
+    //     ss << std::put_time(std::localtime(&tt), "%Y-%m-%d %X");
+    //     ss << "." << time_point_.time_since_epoch().count() % 1000;
+    //     return ss.str();
+    // }
 
     template<uint64_t _Precision = 10, class _Mutex = non_lock>
     class timer_wheel {
@@ -83,7 +106,7 @@ namespace base {
 
             static timer_handle next() {
                 static std::atomic<timer_handle> next_ = 0;
-                if (++next_ == invaild_next) {
+                if (++next_ == invalid_next) {
                     next_ = 1;  // warning....
                 }
                 return next_;
@@ -97,12 +120,12 @@ namespace base {
                 return inst;
             }
 
-            static constexpr timer_handle invaild_next = 0xFFFFFFFFull;
-            static constexpr timer_handle invaild_handle = 0x7FFFFFFFFFull;
+            static constexpr timer_handle invalid_next = 0xFFFFFFFFull;
+            static constexpr timer_handle invalid_handle = 0x7FFFFFFFFFull;
 
             timer_handle get() noexcept {
                 auto make = [](timer_handle handle_, uint16_t& crc) -> timer_handle {
-                    return handle_ & invaild_next | ((++crc & 0x7Full) << 32);
+                    return (handle_ & invalid_next) | ((++crc & 0x7Full) << 32);
                 };
 
                 std::unique_lock<std::mutex> lock(_mutex);    // todo: 待优化
@@ -117,12 +140,12 @@ namespace base {
 
             void put(timer_handle handle_) noexcept {
                 std::unique_lock<std::mutex> lock(_mutex);    // todo: 待优化
-                _free_ids.push(handle_ & invaild_next);
+                _free_ids.push(handle_ & invalid_next);
             }
         };
 
         struct event {
-            timer_handle _handle = handle_gen::invaild_handle;  // 句柄
+            timer_handle _handle = handle_gen::invalid_handle;  // 句柄
             time64_t _next = 0;                                 // 下次执行时间
             time64_t _period = 0;                               // 间隔时间
             uint64_t _round = 1;                                // 执行轮次（剩余）
@@ -138,7 +161,7 @@ namespace base {
                     _round = 1;
             }
             ~event() {
-                if (_handle == handle_gen::invaild_handle)
+                if (_handle == handle_gen::invalid_handle)
                     return;
                 handle_gen::instance().put(_handle);
             }
@@ -152,7 +175,7 @@ namespace base {
         _Mutex _mutex;
         static constexpr time64_t _precision = _Precision;   // 精度
 
-        std::vector<std::list<time64_t>> _wheels;            // 时间轮
+        std::vector<std::queue<time64_t>> _wheels;           // 时间轮
         std::unordered_map<timer_handle, std::shared_ptr<event>> _events;
 
         time64_t _tick = tick() / _precision;                // 扳手时钟
@@ -173,19 +196,24 @@ namespace base {
                 std::forward<timer_callback>(callback)
             );
 
-            std::unique_lock<_Mutex> lock(_mutex);
-            _events.emplace(event_->_handle, event_);
-            submit(event_);
+            {
+                std::unique_lock<_Mutex> lock(_mutex);
+                _events.emplace(event_->_handle, event_);
+                submit_unsafe(event_);
+            }
             return event_->_handle;
         }
 
         inline time_duration stop(const timer_handle& handle) {
-            std::unique_lock<_Mutex> lock(_mutex);
-            const auto iter = _events.find(handle);
-            if (iter == _events.end() || iter->second == nullptr)
-                return time_duration(0);
-            auto evt = iter->second;
-            _events.erase(iter);
+            std::shared_ptr<event> evt = nullptr;
+            {
+                std::unique_lock<_Mutex> lock(_mutex);
+                const auto iter = _events.find(handle);
+                if (iter == _events.end() || iter->second == nullptr)
+                    return time_duration(0);
+                evt = iter->second;
+                _events.erase(iter);
+            }
             const auto tick_ = tick();
             const auto next_ = evt->_next * _precision;
             if (next_ >= tick_) 
@@ -219,7 +247,7 @@ namespace base {
         }
 
     private:
-        inline void submit(std::shared_ptr<event> evt) {
+        inline void submit_unsafe(std::shared_ptr<event> evt) {
             if (nullptr == evt)
                 return;
 
@@ -227,53 +255,57 @@ namespace base {
             clock clk2 = { _tick };
 
             if (clk1._0() != clk2._0()) {
-                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clock::_1_edge + clk1._0()].push_back(evt->_handle);
+                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clock::_1_edge + clk1._0()].push(evt->_handle);
             } else if (clk1._1() != clk2._1()) {
-                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clk1._1()].push_back(evt->_handle);
+                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clk1._1()].push(evt->_handle);
             } else if (clk1._2() != clk2._2()) {
-                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clk1._2()].push_back(evt->_handle);
+                _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clk1._2()].push(evt->_handle);
             } else if (clk1._3() != clk2._3()) {
-                _wheels[clock::_5_edge + clock::_4_edge + clk1._3()].push_back(evt->_handle);
+                _wheels[clock::_5_edge + clock::_4_edge + clk1._3()].push(evt->_handle);
             } else if (clk1._4() != clk2._4()) {
-                _wheels[clock::_5_edge + clk1._4()].push_back(evt->_handle);
+                _wheels[clock::_5_edge + clk1._4()].push(evt->_handle);
             } else {
-                _wheels[clk1._5()].push_back(evt->_handle);
+                _wheels[clk1._5()].push(evt->_handle);
             }
         }
 
-        inline void step_list(std::list<timer_handle>& lst) {
-            std::unique_lock<_Mutex> lock(_mutex);
+        inline void step_list(std::queue<timer_handle>& lst) {
+            while (true) {
+                std::shared_ptr<event> evt = nullptr;
+                {
+                    std::unique_lock<_Mutex> lock(_mutex);
+                    if (lst.empty())
+                        break;
+                    auto handle = lst.front();
+                    lst.pop();
 
-            auto iter = lst.begin();
-            while (iter != lst.end())
-            {
-                timer_handle handle = *iter;
-                ++iter;
+                    const auto iter_evt = _events.find(handle);
+                    if (iter_evt == _events.end())
+                        continue;
 
-                const auto iter_evt = _events.find(handle);
-                if (iter_evt == _events.end())
-                    continue;
-
-                std::shared_ptr<event> evt = iter_evt->second;
+                    evt = iter_evt->second;
+                }
 
                 if (evt && evt->_next == _tick)
                 {
                     if (evt->_round) {
                         if (evt->_callback)
-                            evt->_callback(handle);
+                            evt->_callback(evt->_handle);
                         evt->_round -= 1;
                     }
-                    
+
                     if (evt->_round == 0ull) {
-                        _events.erase(iter_evt);
+                        std::unique_lock<_Mutex> lock(_mutex);
+                        _events.erase(evt->_handle);
                         continue;
                     }
                     evt->_next = (tick() + evt->_period) / _precision;
                 }
-                submit(evt);
+                {
+                    std::unique_lock<_Mutex> lock(_mutex);
+                    submit_unsafe(evt);
+                }
             }
-
-            lst.clear();
         }
     };
 
@@ -281,25 +313,27 @@ namespace base {
 
 
 /*
- *    {
-        base::timer_wheel<10> tw;
-        tw.add(std::chrono::milliseconds(1000), [](base::timer_handle time_h) {
-            std::cout << "tick....." << time_h << std::endl;
-        }, std::chrono::milliseconds(100), 10);
+    base::timer_wheel<10> tw;
+    tw.add(std::chrono::milliseconds(1000), [](base::timer_handle time_h) {
+        std::cout << "1s tick....." << time_h << ". " << base::current_timestamp() << std::endl;
+    }, std::chrono::milliseconds(100), 10);
 
-        uint32_t count = 0;
-        tw.add(std::chrono::milliseconds(50), [&count, &tw](base::timer_handle time_h) {
-            std::cout << "20...tick....." << time_h << std::endl;
-            count += 1;
-            if (count >= 10)
-                tw.stop(time_h);
-        }, std::chrono::milliseconds(20), -1);
-
-        while (true) {
-            tw.execute();
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            //std::cout << "................while....." << std::endl;
+    uint32_t count = 0;
+    tw.add(std::chrono::milliseconds(50), [&count, &tw](base::timer_handle time_h) {
+        std::cout << "50...tick....." << time_h << ". " << base::current_timestamp() << std::endl;
+        count += 1;
+        if (count >= 10) {
+            tw.stop(time_h);
+            tw.add(std::chrono::seconds(1), [](base::timer_handle time_h) {
+                std::cout << "inner 1s...tick....." << time_h << ". " << base::current_timestamp() << std::endl;
+            });
         }
+    }, std::chrono::milliseconds(20), -1);
+
+    while (true) {
+        tw.execute();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        //std::cout << "................while....." << std::endl;
     }
  *
  */
