@@ -26,14 +26,19 @@ namespace timer {
         void unlock() {}
     };
 
-    template<typename _Duration = std::chrono::milliseconds, int _Value = 0>
-    static time_clock::time_point __time_point() {
-        return time_clock::now() + _Duration(_Value);
+    template<typename _Duration = std::chrono::milliseconds>
+    static time_clock::time_point __time_point(long long value = 0) {
+        return time_clock::now() + _Duration(value);
     }
 
     template<typename _Duration = std::chrono::milliseconds>
     static timestamp current_timestamp() {
         return std::chrono::duration_cast<_Duration>(__time_point<_Duration>().time_since_epoch()).count();
+    }
+
+    template<typename _Duration = std::chrono::milliseconds, typename _Req = long long, typename _Period = std::milli>
+    static timestamp relative_timestamp(std::chrono::duration<_Req, _Period> value) {
+        return std::chrono::duration_cast<_Duration>(__time_point<std::chrono::duration<_Req, _Period>>(value.count()).time_since_epoch()).count();
     }
 
     // todo: 性能较差
