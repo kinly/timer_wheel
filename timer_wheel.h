@@ -4,9 +4,7 @@
 #include <functional>
 #include <memory>
 #include <queue>
-#include <ctime>
-#include <iomanip>
-#include <sstream>
+#include <mutex>
 
 namespace timer {
     /**
@@ -53,8 +51,8 @@ namespace timer {
     using time64_t = uint64_t;
     using bucket_t = time64_t;
 
-    static constexpr time64_t tick() {
-        return std::chrono::duration_cast<time_duration>(time_clock::now().time_since_epoch()).count();
+    static time64_t tick() {
+        return current_timestamp<time_duration>();
     }
 
     struct clock {
