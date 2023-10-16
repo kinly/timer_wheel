@@ -10,8 +10,8 @@
 
 namespace timer {
     /**
-     * \brief Ê±¼äÂÖ¶¨Ê±Æ÷
-     * ÖÕµãÊ±¼ä£º2100-01-01 00:00:00 (period: 1ms) see: clock
+     * \brief æ—¶é—´è½®å®šæ—¶å™¨
+     * ç»ˆç‚¹æ—¶é—´ï¼š2100-01-01 00:00:00 (period: 1ms) see: clock
      * min period: 1ms
      */
 
@@ -26,22 +26,22 @@ namespace timer {
         void unlock() {}
     };
 
-    template<typename _Duration = std::chrono::milliseconds>
+    template<typename duration_tt = std::chrono::milliseconds>
     static constexpr time_clock::time_point __time_point(long long value = 0) noexcept {
-        return time_clock::now() + _Duration(value);
+        return time_clock::now() + duration_tt(value);
     }
 
-    template<typename _Duration = std::chrono::milliseconds>
+    template<typename duration_tt = std::chrono::milliseconds>
     static constexpr timestamp current_timestamp() noexcept {
-        return std::chrono::duration_cast<_Duration>(__time_point<_Duration>().time_since_epoch()).count();
+        return std::chrono::duration_cast<duration_tt>(__time_point<duration_tt>().time_since_epoch()).count();
     }
 
-    template<typename _Duration = std::chrono::milliseconds, typename _Req = long long, typename _Period = std::milli>
-    static constexpr timestamp relative_timestamp(std::chrono::duration<_Req, _Period> value) noexcept {
-        return std::chrono::duration_cast<_Duration>(__time_point<std::chrono::duration<_Req, _Period>>(value.count()).time_since_epoch()).count();
+    template<typename duration_tt = std::chrono::milliseconds, typename req_tt = long long, typename period_tt = std::milli>
+    static constexpr timestamp relative_timestamp(std::chrono::duration<req_tt, period_tt> value) noexcept {
+        return std::chrono::duration_cast<duration_tt>(__time_point<std::chrono::duration<req_tt, period_tt>>(value.count()).time_since_epoch()).count();
     }
 
-    // todo: ĞÔÄÜ½Ï²î
+    // todo: æ€§èƒ½è¾ƒå·®
     // static std::string current_timestamp_str() {
     //     auto time_point_ = __time_point<time_duration>();
     //     std::time_t tt = time_clock::to_time_t(time_point_);
@@ -100,7 +100,7 @@ namespace timer {
         }
     };
 
-    static constexpr std::size_t bucket_count = 0x600; // ·ÖÍ°×ÜÊı
+    static constexpr std::size_t bucket_count = 0x600; // åˆ†æ¡¶æ€»æ•°
 
     struct handle_gen {
     private:
@@ -132,7 +132,7 @@ namespace timer {
                 return (handle_ & invalid_next) | ((++crc & 0x7Full) << 32);
             };
 
-            std::unique_lock<std::mutex> lock(_mutex);    // todo: ´ıÓÅ»¯
+            std::unique_lock<std::mutex> lock(_mutex);    // todo: å¾…ä¼˜åŒ–
             if (_free_ids.empty()) {
                 static uint16_t default_crc = 1;
                 return make(next(), default_crc);
@@ -143,7 +143,7 @@ namespace timer {
         }
 
         void put(timer_handle handle_) noexcept {
-            std::unique_lock<std::mutex> lock(_mutex);    // todo: ´ıÓÅ»¯
+            std::unique_lock<std::mutex> lock(_mutex);    // todo: å¾…ä¼˜åŒ–
             _free_ids.push(handle_ & invalid_next);
         }
     };
@@ -153,12 +153,12 @@ namespace timer {
     using timer_stopped_callback = std::function<void(std::shared_ptr<event_interface>)>;
 
     struct event_interface {
-        timer_handle _handle = handle_gen::invalid_handle;  // ¾ä±ú
-        time64_t _next = 0;                                 // ÏÂ´ÎÖ´ĞĞÊ±¼ä
-        time64_t _period = 0;                               // ¼ä¸ôÊ±¼ä
-        uint64_t _round = 1;                                // Ö´ĞĞÂÖ´Î£¨Ê£Óà£©
-        timer_callback _callback = nullptr;                 // »Øµ÷
-        timer_stopped_callback _stopped_callback = nullptr; // Í£Ö¹»Øµ÷
+        timer_handle _handle = handle_gen::invalid_handle;  // å¥æŸ„
+        time64_t _next = 0;                                 // ä¸‹æ¬¡æ‰§è¡Œæ—¶é—´
+        time64_t _period = 0;                               // é—´éš”æ—¶é—´
+        uint64_t _round = 1;                                // æ‰§è¡Œè½®æ¬¡ï¼ˆå‰©ä½™ï¼‰
+        timer_callback _callback = nullptr;                 // å›è°ƒ
+        timer_stopped_callback _stopped_callback = nullptr; // åœæ­¢å›è°ƒ
 
         std::string _remark{ };                             // debug remark
 
@@ -181,9 +181,9 @@ namespace timer {
         virtual time64_t next() = 0;                         // next trigger time
     };
 
-    template<uint64_t _Precision = 10>
+    template<uint64_t precision_tt = 10>
     struct event_custom : public event_interface {
-        static constexpr time64_t _precision = _Precision;
+        static constexpr time64_t _precision = precision_tt;
 
         explicit event_custom(time64_t nxt, time64_t period, uint64_t round, timer_callback&& cb, timer_stopped_callback&& stopped_cb)
             : event_interface(nxt, period, round, std::forward<timer_callback>(cb), std::forward<timer_stopped_callback>(stopped_cb)) {
@@ -206,9 +206,9 @@ namespace timer {
         }
     };
 
-    template<uint64_t _Precision = 10>
+    template<uint64_t precision_tt = 10>
     struct event_crontab : public event_interface {
-        static constexpr time64_t _precision = _Precision;
+        static constexpr time64_t _precision = precision_tt;
 
         cron::cronexpr _cronexpr;    // cronexpr
 
@@ -234,6 +234,7 @@ namespace timer {
                 result->next();
                 return result;
             } catch (cron::bad_cronexpr const& ex) {
+                // todo: log
                 return nullptr;
             }
         }
@@ -245,26 +246,27 @@ namespace timer {
                 result->next();
                 return result;
             } catch (cron::bad_cronexpr const& ex) {
+                // todo: log
                 return nullptr;
             }
         }
     };
 
-    template<uint64_t _Precision = 10, class _Mutex = empty_mutex>
+    template<uint64_t precision_tt = 10, class mutex_tt = empty_mutex>
     class timer_wheel {
 
     private:
-        _Mutex _mutex;
-        static constexpr time64_t _precision = _Precision;   // ¾«¶È
+        mutex_tt _mutex;
+        static constexpr time64_t _precision = precision_tt;   // ç²¾åº¦
 
-        std::vector<std::queue<time64_t>> _wheels;           // Ê±¼äÂÖ
+        std::vector<std::queue<time64_t>> _wheels;           // æ—¶é—´è½®
         std::unordered_map<timer_handle, std::shared_ptr<event_interface>> _events;
 
-        time64_t _tick = tick() / _precision;                // °âÊÖÊ±ÖÓ
+        time64_t _tick = tick() / _precision;                // æ‰³æ‰‹æ—¶é’Ÿ
 
     public:
         timer_wheel() {
-            std::unique_lock<_Mutex> lock(_mutex);
+            std::unique_lock<mutex_tt> lock(_mutex);
             _wheels.resize(bucket_count);
         }
 
@@ -284,7 +286,7 @@ namespace timer {
             );
 
             {
-                std::unique_lock<_Mutex> lock(_mutex);
+                std::unique_lock<mutex_tt> lock(_mutex);
                 _events.emplace(event_->_handle, event_);
                 submit_unsafe(event_);
             }
@@ -301,7 +303,7 @@ namespace timer {
             );
 
             {
-                std::unique_lock<_Mutex> lock(_mutex);
+                std::unique_lock<mutex_tt> lock(_mutex);
                 _events.emplace(event_->_handle, event_);
                 submit_unsafe(event_);
             }
@@ -318,7 +320,7 @@ namespace timer {
             );
 
             {
-                std::unique_lock<_Mutex> lock(_mutex);
+                std::unique_lock<mutex_tt> lock(_mutex);
                 _events.emplace(event_->_handle, event_);
                 submit_unsafe(event_);
             }
@@ -328,7 +330,7 @@ namespace timer {
         inline time_duration stop(const timer_handle& handle) {
             std::shared_ptr<event_interface> evt = nullptr;
             {
-                std::unique_lock<_Mutex> lock(_mutex);
+                std::unique_lock<mutex_tt> lock(_mutex);
                 const auto iter = _events.find(handle);
                 if (iter == _events.end() || iter->second == nullptr)
                     return time_duration(0);
@@ -398,7 +400,7 @@ namespace timer {
             while (true) {
                 std::shared_ptr<event_interface> evt = nullptr;
                 {
-                    std::unique_lock<_Mutex> lock(_mutex);
+                    std::unique_lock<mutex_tt> lock(_mutex);
                     if (lst.empty())
                         break;
                     auto handle = lst.front();
@@ -421,7 +423,7 @@ namespace timer {
 
                     if (evt->_round == 0ull) {
                         {
-                            std::unique_lock<_Mutex> lock(_mutex);
+                            std::unique_lock<mutex_tt> lock(_mutex);
                             _events.erase(evt->_handle);
                         }
 
@@ -433,7 +435,7 @@ namespace timer {
                     evt->next();
                 }
                 {
-                    std::unique_lock<_Mutex> lock(_mutex);
+                    std::unique_lock<mutex_tt> lock(_mutex);
                     submit_unsafe(evt);
                 }
             }
