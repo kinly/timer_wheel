@@ -338,8 +338,10 @@ namespace timer {
                 _events.erase(iter);
             }
 
-            if (evt->_stopped_callback)
+            if (evt->_stopped_callback) {
                 evt->_stopped_callback(evt);
+                evt->_stopped_callback = nullptr;
+            }
 
             const auto tick_ = tick();
             const auto next_ = evt->_next * _precision;
@@ -418,6 +420,12 @@ namespace timer {
                     if (evt->_round) {
                         if (evt->_callback)
                             evt->_callback(evt->_handle);
+                        {
+                            std::unique_lock<mutex_tt> lock(_mutex);
+                            if (_events.find(evt->_handle) == _events.end()) {
+                                continue;
+                            }
+                        }
                         evt->_round -= 1;
                     }
 
