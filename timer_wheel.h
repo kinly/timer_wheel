@@ -434,6 +434,9 @@ class timer_wheel {
                           clock::_3_edge + clock::_4_edge + clock::_5_edge]);
       }
 
+     if (_tick == tick_now)
+        break;
+     
       _tick += 1;
     }
   }
@@ -442,6 +445,13 @@ class timer_wheel {
   inline void submit_unsafe(std::shared_ptr<event_interface> evt) {
     if (nullptr == evt)
       return;
+
+   // 由于下面情况可能造成 _next < _tick，这里做简单修正
+   // 1. system_clock 回调时间
+   // 2. add 函数 先取时间，后lock插入定时器
+   if (evt->_next < _tick) {
+     evt->_next = _tick;
+   }
 
     clock clk1 = {evt->_next};
     clock clk2 = {_tick};
