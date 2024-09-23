@@ -11,7 +11,7 @@
 namespace timer {
 /**
  * \brief 时间轮定时器
- * 终点时间(约)：2100-01-01 00:00:00 (period: 1ms) see: clock
+ * 终点时间：2100-01-01 00:00:00 (period: 1ms) see: clock
  * min period: 1ms
  */
 
@@ -72,19 +72,31 @@ struct clock {
   constexpr clock(time64_t src) : _time64(src) {}
   constexpr clock() : clock(0) {}
 
-  static constexpr bucket_t _5_bits = 10;
-  static constexpr bucket_t _4_bits = 8;
-  static constexpr bucket_t _3_bits = 6;
-  static constexpr bucket_t _2_bits = 6;
-  static constexpr bucket_t _1_bits = 6;
-  static constexpr bucket_t _0_bits = 6;
+  // static constexpr bucket_t _5_bits = 10;
+  // static constexpr bucket_t _4_bits = 8;
+  // static constexpr bucket_t _3_bits = 6;
+  // static constexpr bucket_t _2_bits = 6;
+  // static constexpr bucket_t _1_bits = 6;
+  // static constexpr bucket_t _0_bits = 6;
+
+  static constexpr bucket_t _5_bits = 4;  // 1 -> 16
+  static constexpr bucket_t _4_bits = 2;  // 16 -> 64
+  static constexpr bucket_t _3_bits = 2;
+  static constexpr bucket_t _2_bits = 2;
+  static constexpr bucket_t _1_bits = 10;
+  static constexpr bucket_t _0_bits = 10;
 
   static constexpr bucket_t _5_edge = 1ull << _5_bits;  // 1ms -> 1024ms(1s)
-  static constexpr bucket_t _4_edge = 1ull << _4_bits;  // 1024ms -> 262144ms(4min)
-  static constexpr bucket_t _3_edge = 1ull << _3_bits;  // 262144ms -> 16777216ms(4hour)
-  static constexpr bucket_t _2_edge = 1ull << _2_bits;  // 16777216ms -> 1073741824ms(12day)
-  static constexpr bucket_t _1_edge = 1ull << _1_bits;  // 1073741824ms -> 68719476736ms(795day)
-  static constexpr bucket_t _0_edge = 1ull << _0_bits;  // 68719476736ms -> 4398046511104(50903day)
+  static constexpr bucket_t _4_edge = 1ull
+                                      << _4_bits;  // 1024ms -> 262144ms(4min)
+  static constexpr bucket_t _3_edge =
+      1ull << _3_bits;  // 262144ms -> 16777216ms(4hour)
+  static constexpr bucket_t _2_edge =
+      1ull << _2_bits;  // 16777216ms -> 1073741824ms(12day)
+  static constexpr bucket_t _1_edge =
+      1ull << _1_bits;  // 1073741824ms -> 68719476736ms(795day)
+  static constexpr bucket_t _0_edge =
+      1ull << _0_bits;  // 68719476736ms -> 4398046511104(50903day)
 
   // https://stackoverflow.com/questions/76605488/inconsistent-results-when-type-punning-uint64-t-with-union-and-bit-field
   constexpr bucket_t _5() const { return (_time64 >> 0) & (_5_edge - 1); }
@@ -434,9 +446,9 @@ class timer_wheel {
                           clock::_3_edge + clock::_4_edge + clock::_5_edge]);
       }
 
-     if (_tick == tick_now)
+      if (_tick == tick_now)
         break;
-     
+
       _tick += 1;
     }
   }
@@ -446,12 +458,9 @@ class timer_wheel {
     if (nullptr == evt)
       return;
 
-   // 由于下面情况可能造成 _next < _tick，这里做简单修正
-   // 1. system_clock 回调时间
-   // 2. add 函数 先取时间，后lock插入定时器
-   if (evt->_next < _tick) {
-     evt->_next = _tick;
-   }
+    if (evt->_next < _tick) {
+      evt->_next = _tick;
+    }
 
     clock clk1 = {evt->_next};
     clock clk2 = {_tick};
