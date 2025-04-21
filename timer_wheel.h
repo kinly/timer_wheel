@@ -27,27 +27,21 @@ class empty_mutex {
 };
 
 template <typename duration_tt = std::chrono::milliseconds>
-static constexpr time_clock::time_point __time_point(
-    long long value = 0) noexcept {
+static constexpr time_clock::time_point __time_point(long long value = 0) noexcept {
   return time_clock::now() + duration_tt(value);
 }
 
 template <typename duration_tt = std::chrono::milliseconds>
 static constexpr timestamp current_timestamp() noexcept {
-  return std::chrono::duration_cast<duration_tt>(
-             __time_point<duration_tt>().time_since_epoch())
-      .count();
+  return std::chrono::duration_cast<duration_tt>(__time_point<duration_tt>().time_since_epoch()).count();
 }
 
-template <typename duration_tt = std::chrono::milliseconds,
-          typename req_tt = long long, typename period_tt = std::milli>
-static constexpr timestamp relative_timestamp(
-    std::chrono::duration<req_tt, period_tt> value) noexcept {
+template <typename duration_tt = std::chrono::milliseconds, typename req_tt = long long,
+  typename period_tt = std::milli>
+static constexpr timestamp relative_timestamp(std::chrono::duration<req_tt, period_tt> value) noexcept {
   return std::chrono::duration_cast<duration_tt>(
-             __time_point<std::chrono::duration<req_tt, period_tt>>(
-                 value.count())
-                 .time_since_epoch())
-      .count();
+    __time_point<std::chrono::duration<req_tt, period_tt>>(value.count()).time_since_epoch())
+    .count();
 }
 
 // todo: 性能较差
@@ -87,20 +81,19 @@ struct clock {
   static constexpr bucket_t _0_bits = 10;
 
   static constexpr bucket_t _5_edge = 1ull << _5_bits;  // 1ms -> 1024ms(1s)
-  static constexpr bucket_t _4_edge = 1ull
-                                      << _4_bits;  // 1024ms -> 262144ms(4min)
-  static constexpr bucket_t _3_edge =
-      1ull << _3_bits;  // 262144ms -> 16777216ms(4hour)
-  static constexpr bucket_t _2_edge =
-      1ull << _2_bits;  // 16777216ms -> 1073741824ms(12day)
-  static constexpr bucket_t _1_edge =
-      1ull << _1_bits;  // 1073741824ms -> 68719476736ms(795day)
-  static constexpr bucket_t _0_edge =
-      1ull << _0_bits;  // 68719476736ms -> 4398046511104(50903day)
+  static constexpr bucket_t _4_edge = 1ull << _4_bits;  // 1024ms -> 262144ms(4min)
+  static constexpr bucket_t _3_edge = 1ull << _3_bits;  // 262144ms -> 16777216ms(4hour)
+  static constexpr bucket_t _2_edge = 1ull << _2_bits;  // 16777216ms -> 1073741824ms(12day)
+  static constexpr bucket_t _1_edge = 1ull << _1_bits;  // 1073741824ms -> 68719476736ms(795day)
+  static constexpr bucket_t _0_edge = 1ull << _0_bits;  // 68719476736ms -> 4398046511104(50903day)
 
   // https://stackoverflow.com/questions/76605488/inconsistent-results-when-type-punning-uint64-t-with-union-and-bit-field
-  constexpr bucket_t _5() const { return (_time64 >> 0) & (_5_edge - 1); }
-  constexpr bucket_t _4() const { return (_time64 >> _5_bits) & (_4_edge - 1); }
+  constexpr bucket_t _5() const {
+    return (_time64 >> 0) & (_5_edge - 1);
+  }
+  constexpr bucket_t _4() const {
+    return (_time64 >> _5_bits) & (_4_edge - 1);
+  }
   constexpr bucket_t _3() const {
     return (_time64 >> (_4_bits + _5_bits)) & (_3_edge - 1);
   }
@@ -111,14 +104,12 @@ struct clock {
     return (_time64 >> (_2_bits + _3_bits + _4_bits + _5_bits)) & (_1_edge - 1);
   }
   constexpr bucket_t _0() const {
-    return (_time64 >> (_1_bits + _2_bits + _3_bits + _4_bits + _5_bits)) &
-           (_0_edge - 1);
+    return (_time64 >> (_1_bits + _2_bits + _3_bits + _4_bits + _5_bits)) & (_0_edge - 1);
   }
 };
 
-static constexpr std::size_t bucket_count = clock::_5_edge + clock::_4_edge +
-                                            clock::_3_edge + clock::_2_edge +
-                                            clock::_1_edge + clock::_0_edge;
+static constexpr std::size_t bucket_count =
+  clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clock::_1_edge + clock::_0_edge;
 
 struct handle_gen {
  private:
@@ -169,22 +160,20 @@ struct handle_gen {
 
 struct event_interface;
 using timer_callback = std::function<void(timer_handle)>;
-using timer_stopped_callback =
-    std::function<void(std::shared_ptr<event_interface>)>;
+using timer_stopped_callback = std::function<void(std::shared_ptr<event_interface>)>;
 
 struct event_interface {
-  timer_handle _handle = handle_gen::invalid_handle;  // 句柄
-  time64_t _next = 0;                                 // 下次执行时间
-  time64_t _period = 0;                               // 间隔时间
-  uint64_t _round = 1;                 // 执行轮次（剩余）
-  timer_callback _callback = nullptr;  // 回调
+  timer_handle _handle = handle_gen::invalid_handle;   // 句柄
+  time64_t _next = 0;                                  // 下次执行时间
+  time64_t _period = 0;                                // 间隔时间
+  uint64_t _round = 1;                                 // 执行轮次（剩余）
+  timer_callback _callback = nullptr;                  // 回调
   timer_stopped_callback _stopped_callback = nullptr;  // 停止回调
 
   std::string _remark{};  // debug remark
 
-  explicit event_interface(time64_t nxt, time64_t period, uint64_t round,
-                           timer_callback &&cb,
-                           timer_stopped_callback &&stopped_cb)
+  explicit event_interface(
+    time64_t nxt, time64_t period, uint64_t round, timer_callback &&cb, timer_stopped_callback &&stopped_cb)
       : _next(nxt),
         _period(period),
         _round(round),
@@ -207,11 +196,10 @@ template <uint64_t precision_tt = 10>
 struct event_custom : public event_interface {
   static constexpr time64_t _precision = precision_tt;
 
-  explicit event_custom(time64_t nxt, time64_t period, uint64_t round,
-                        timer_callback &&cb,
-                        timer_stopped_callback &&stopped_cb)
-      : event_interface(nxt, period, round, std::forward<timer_callback>(cb),
-                        std::forward<timer_stopped_callback>(stopped_cb)) {}
+  explicit event_custom(
+    time64_t nxt, time64_t period, uint64_t round, timer_callback &&cb, timer_stopped_callback &&stopped_cb)
+      : event_interface(
+          nxt, period, round, std::forward<timer_callback>(cb), std::forward<timer_stopped_callback>(stopped_cb)) {}
 
   ~event_custom() {}
 
@@ -221,11 +209,9 @@ struct event_custom : public event_interface {
   }
 
   static std::shared_ptr<event_interface> create(
-      time64_t nxt, time64_t period, uint64_t round, timer_callback &&cb,
-      timer_stopped_callback &&stopped_cb) {
+    time64_t nxt, time64_t period, uint64_t round, timer_callback &&cb, timer_stopped_callback &&stopped_cb) {
     std::shared_ptr<event_custom> result = std::make_shared<event_custom>(
-        nxt, period, round, std::forward<timer_callback>(cb),
-        std::forward<timer_stopped_callback>(stopped_cb));
+      nxt, period, round, std::forward<timer_callback>(cb), std::forward<timer_stopped_callback>(stopped_cb));
     return result;
   }
 };
@@ -236,28 +222,23 @@ struct event_crontab : public event_interface {
 
   cron::cronexpr _cronexpr;  // cronexpr
 
-  explicit event_crontab(timer_callback &&cb,
-                         timer_stopped_callback &&stopped_cb)
-      : event_interface(tick() / _precision, -1, -1,
-                        std::forward<timer_callback>(cb),
-                        std::forward<timer_stopped_callback>(stopped_cb)) {}
+  explicit event_crontab(timer_callback &&cb, timer_stopped_callback &&stopped_cb)
+      : event_interface(tick() / _precision, -1, -1, std::forward<timer_callback>(cb),
+          std::forward<timer_stopped_callback>(stopped_cb)) {}
 
   ~event_crontab() {}
 
   virtual time64_t next() {
     auto last = event_interface::_next * _precision / 1000;
-    event_interface::_next =
-        cron::cron_next(_cronexpr, last) * 1000 / _precision;
+    event_interface::_next = cron::cron_next(_cronexpr, last) * 1000 / _precision;
     return event_interface::_next;
   }
 
   static std::shared_ptr<event_interface> create(
-      const std::string &cron_str, timer_callback &&cb,
-      timer_stopped_callback &&stopped_cb) {
+    const std::string &cron_str, timer_callback &&cb, timer_stopped_callback &&stopped_cb) {
     try {
       std::shared_ptr<event_crontab> result = std::make_shared<event_crontab>(
-          std::forward<timer_callback>(cb),
-          std::forward<timer_stopped_callback>(stopped_cb));
+        std::forward<timer_callback>(cb), std::forward<timer_stopped_callback>(stopped_cb));
       result->_cronexpr = cron::make_cron(cron_str);
       result->next();
       return result;
@@ -268,12 +249,10 @@ struct event_crontab : public event_interface {
   }
 
   static std::shared_ptr<event_interface> create(
-      std::string &&cron_str, timer_callback &&cb,
-      timer_stopped_callback &&stopped_cb) {
+    std::string &&cron_str, timer_callback &&cb, timer_stopped_callback &&stopped_cb) {
     try {
       std::shared_ptr<event_crontab> result = std::make_shared<event_crontab>(
-          std::forward<timer_callback>(cb),
-          std::forward<timer_stopped_callback>(stopped_cb));
+        std::forward<timer_callback>(cb), std::forward<timer_stopped_callback>(stopped_cb));
       result->_cronexpr = cron::make_cron(cron_str);
       result->next();
       return result;
@@ -316,13 +295,11 @@ template <std::size_t thread_count>
 class alert_mt final : public alert_interface {
  private:
   std::array<std::thread, thread_count> _threads;
-  std::queue<std::shared_ptr<event_interface>>
-      _evt_queue;  // timer_wheel push, _threads pop
+  std::queue<std::shared_ptr<event_interface>> _evt_queue;  // timer_wheel push, _threads pop
   std::mutex _mux;
 };
 
-template <uint64_t precision_tt = 10, class mutex_tt = empty_mutex,
-          class alert = alert_default>
+template <uint64_t precision_tt = 10, class mutex_tt = empty_mutex, class alert = alert_default>
 class timer_wheel {
  private:
   mutex_tt _mutex;
@@ -340,18 +317,13 @@ class timer_wheel {
   }
 
   template <class Rep, class Period>
-  inline timer_handle add(const std::chrono::duration<Rep, Period> &when,
-                          timer_callback &&callback,
-                          timer_stopped_callback &&stopped_callback = nullptr,
-                          const time_duration &period = time_duration::zero(),
-                          const int64_t round = 0) {
+  inline timer_handle add(const std::chrono::duration<Rep, Period> &when, timer_callback &&callback,
+    timer_stopped_callback &&stopped_callback = nullptr, const time_duration &period = time_duration::zero(),
+    const int64_t round = 0) {
     std::shared_ptr<event_interface> event_ = event_custom<_precision>::create(
-        std::chrono::duration_cast<time_duration>(
-            (time_clock::now() + when).time_since_epoch())
-                .count() /
-            _precision,
-        period.count(), round, std::forward<timer_callback>(callback),
-        std::forward<timer_stopped_callback>(stopped_callback));
+      std::chrono::duration_cast<time_duration>((time_clock::now() + when).time_since_epoch()).count() / _precision,
+      period.count(), round, std::forward<timer_callback>(callback),
+      std::forward<timer_stopped_callback>(stopped_callback));
 
     if (event_ == nullptr) {
       return handle_gen::invalid_handle;
@@ -365,12 +337,10 @@ class timer_wheel {
     return event_->_handle;
   }
 
-  inline timer_handle add(const std::string &cron_str,
-                          timer_callback &&callback,
-                          timer_stopped_callback &&stopped_callback = nullptr) {
+  inline timer_handle add(
+    const std::string &cron_str, timer_callback &&callback, timer_stopped_callback &&stopped_callback = nullptr) {
     std::shared_ptr<event_interface> event_ = event_crontab<_precision>::create(
-        cron_str, std::forward<timer_callback>(callback),
-        std::forward<timer_stopped_callback>(stopped_callback));
+      cron_str, std::forward<timer_callback>(callback), std::forward<timer_stopped_callback>(stopped_callback));
 
     {
       std::scoped_lock<mutex_tt> lock(_mutex);
@@ -380,12 +350,10 @@ class timer_wheel {
     return event_->_handle;
   }
 
-  inline timer_handle add(std::string &&cron_str, timer_callback &&callback,
-                          timer_stopped_callback &&stopped_callback = nullptr) {
-    std::shared_ptr<event_interface> event_ = event_crontab<_precision>::create(
-        std::forward<std::string>(cron_str),
-        std::forward<timer_callback>(callback),
-        std::forward<timer_stopped_callback>(stopped_callback));
+  inline timer_handle add(
+    std::string &&cron_str, timer_callback &&callback, timer_stopped_callback &&stopped_callback = nullptr) {
+    std::shared_ptr<event_interface> event_ = event_crontab<_precision>::create(std::forward<std::string>(cron_str),
+      std::forward<timer_callback>(callback), std::forward<timer_stopped_callback>(stopped_callback));
 
     {
       std::scoped_lock<mutex_tt> lock(_mutex);
@@ -426,24 +394,17 @@ class timer_wheel {
 
       if (clk._5()) {
         step_list(_wheels[clk._5()]);
-      }
-      else if (clk._4()) {
+      } else if (clk._4()) {
         step_list(_wheels[clk._4() + clock::_5_edge]);
-      }
-      else if (clk._3()) {
+      } else if (clk._3()) {
         step_list(_wheels[clk._3() + clock::_4_edge + clock::_5_edge]);
-      }
-      else if (clk._2()) {
-        step_list(_wheels[clk._2() + clock::_3_edge + clock::_4_edge +
-                          clock::_5_edge]);
-      }
-      else if (clk._1()) {
-        step_list(_wheels[clk._1() + clock::_2_edge + clock::_3_edge +
-                          clock::_4_edge + clock::_5_edge]);
-      }
-      else if (clk._0()) {
-        step_list(_wheels[clk._0() + clock::_1_edge + clock::_2_edge +
-                          clock::_3_edge + clock::_4_edge + clock::_5_edge]);
+      } else if (clk._2()) {
+        step_list(_wheels[clk._2() + clock::_3_edge + clock::_4_edge + clock::_5_edge]);
+      } else if (clk._1()) {
+        step_list(_wheels[clk._1() + clock::_2_edge + clock::_3_edge + clock::_4_edge + clock::_5_edge]);
+      } else if (clk._0()) {
+        step_list(
+          _wheels[clk._0() + clock::_1_edge + clock::_2_edge + clock::_3_edge + clock::_4_edge + clock::_5_edge]);
       }
 
       if (_tick == tick_now)
@@ -466,26 +427,17 @@ class timer_wheel {
     clock clk2 = {_tick};
 
     if (clk1._0() != clk2._0()) {
-      _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge +
-              clock::_2_edge + clock::_1_edge + clk1._0()]
-          .push(evt->_handle);
-    }
-    else if (clk1._1() != clk2._1()) {
-      _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge +
-              clock::_2_edge + clk1._1()]
-          .push(evt->_handle);
-    }
-    else if (clk1._2() != clk2._2()) {
-      _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clk1._2()]
-          .push(evt->_handle);
-    }
-    else if (clk1._3() != clk2._3()) {
+      _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clock::_1_edge + clk1._0()].push(
+        evt->_handle);
+    } else if (clk1._1() != clk2._1()) {
+      _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clock::_2_edge + clk1._1()].push(evt->_handle);
+    } else if (clk1._2() != clk2._2()) {
+      _wheels[clock::_5_edge + clock::_4_edge + clock::_3_edge + clk1._2()].push(evt->_handle);
+    } else if (clk1._3() != clk2._3()) {
       _wheels[clock::_5_edge + clock::_4_edge + clk1._3()].push(evt->_handle);
-    }
-    else if (clk1._4() != clk2._4()) {
+    } else if (clk1._4() != clk2._4()) {
       _wheels[clock::_5_edge + clk1._4()].push(evt->_handle);
-    }
-    else {
+    } else {
       _wheels[clk1._5()].push(evt->_handle);
     }
   }
