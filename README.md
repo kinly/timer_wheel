@@ -1,5 +1,9 @@
 # timer_wheel
 
+## 2025-04-20
+- 优化：引入对象池 https://github.com/kinly/anything/blob/main/easy_allocator.h
+- 优化：当前使用的 bucket_count = 2076，有点大，第0、1层都是比较空间换时间的池子，如果不需要的话可以考虑修改 event 增加一个 remaining_ticks 的概念，记录待在这个格子的次数，这样用小的时间轮也不会因为需要频繁触发计算换轮子带来不必要的性能损失
+
 时间轮定时器
 
 https://kinly.github.io/archives/de38e5db.html
